@@ -39,6 +39,10 @@ discord_webhook.txt
 # nom de la cle) -- secret, jamais versionne
 deploy_config.txt
 
+# Build .NET (migration NovaVox → C#/WPF, voir dotnet/)
+dotnet/**/bin/
+dotnet/**/obj/
+
 # Divers éditeurs / OS
 .vscode/
 .idea/
