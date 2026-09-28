@@ -792,9 +792,22 @@ def _load_update_manifest_url():
     return "https://novanox.1ercorpscolonial.fr/version.json"
 
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
+# Réédition .NET/WPF de NovaVox (dépôt distinct, sa propre numérotation
+# de version repartie à 0.0.1 — voir NovaVoxNET/UpdateChecker.cs). La
+# variante GitHub de CET installeur (build_exe.bat) pointe maintenant
+# ICI plutôt que vers les releases GitHub de NovaVox lui-même : le canal
+# GitHub existant sert désormais à orienter les utilisateurs de cette
+# version Python vers la nouvelle édition, plutôt qu'à vérifier une
+# nouvelle version de cette même version Python (toujours possible via
+# la variante "serveur Engooref", inchangée). Comparer les numéros de
+# version serait trompeur ici (0.0.1 côté .NET est numériquement
+# inférieur à la version Python courante) : voir le traitement dédié
+# dans check_for_update ci-dessous, qui ignore volontairement la
+# comparaison numérique pour cette URL précise.
+NOVAVOX2_RELEASES_URL = "https://api.github.com/repos/ammoniak07/NovaVox_2/releases/latest"
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.8"
+APP_VERSION_FALLBACK = "0.2.9"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 MAIN_WINDOW_TITLE = "Star Citizen — NOVAVOX"
@@ -2972,8 +2985,18 @@ class Api:
         - Format simple (serveur Engooref) : {"version": "...", "url": "..."}
         - Réponse native de l'API GitHub Releases (contient "tag_name" et
           "assets") : la version est déduite du tag (ex. "v0.2.0" → "0.2.0"),
-          et l'URL de téléchargement est celle de l'asset nommé
-          NovaVox_Setup.exe dans la release."""
+          et l'URL de téléchargement est celle du premier asset .exe de la
+          release.
+
+        Cas particulier (voir NOVAVOX2_RELEASES_URL ci-dessus) : quand
+        UPDATE_MANIFEST_URL pointe vers les releases GitHub de la réédition
+        .NET/WPF (variante GitHub de cet installeur), la comparaison
+        numérique de version est volontairement IGNORÉE — cette édition a
+        sa propre numérotation, repartie à 0.0.1, donc toujours "plus
+        petite" que la version Python courante malgré le fait qu'elle
+        représente bien la suite à installer. Toute release GitHub trouvée
+        là-bas (avec un .exe joint) est donc signalée comme disponible."""
+        is_edition_migration = UPDATE_MANIFEST_URL == NOVAVOX2_RELEASES_URL
         try:
             req = urllib.request.Request(
                 UPDATE_MANIFEST_URL, headers={"User-Agent": "NOVAVOX-updater"}
@@ -2995,10 +3018,23 @@ class Api:
             local_version = get_app_version()
             self._log(
                 f"[Info] Check MAJ : manifest lu ({UPDATE_MANIFEST_URL}) → "
-                f"version distante={remote_version!r}, version locale={local_version!r}.",
+                f"version distante={remote_version!r}, version locale={local_version!r}"
+                f"{' (édition .NET/WPF, comparaison numérique ignorée)' if is_edition_migration else ''}.",
                 "info",
             )
-            if remote_version and _version_tuple(remote_version) > _version_tuple(local_version):
+            if is_edition_migration:
+                if remote_version and download_url:
+                    self._log(
+                        f"[Info] Nouvelle édition disponible : NovaVox {remote_version} (.NET/WPF).",
+                        "success",
+                    )
+                    return {
+                        "available": True,
+                        "version": remote_version,
+                        "url": download_url,
+                        "edition": True,
+                    }
+            elif remote_version and _version_tuple(remote_version) > _version_tuple(local_version):
                 self._log(f"[Info] Nouvelle version disponible : v{remote_version}.", "success")
                 return {
                     "available": True,

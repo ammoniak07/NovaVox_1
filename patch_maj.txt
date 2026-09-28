@@ -1,5 +1,8 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.9
+------
+-Version final pour NovaVox 1, passage a Novavox 2
 v0.2.8
 ------
 - Nouveau champ de saisie sous la discussion Gemini pour poser une question par écrit (en plus de la voix), avec une case 🔊 dédiée pour choisir si la réponse à CETTE question précise est lue à voix haute, indépendamment du réglage général « Lire les réponses à voix haute ».

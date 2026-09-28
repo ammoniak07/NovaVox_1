@@ -155,7 +155,7 @@ async function checkForUpdate() {
   try {
     const res = await window.pywebview.api.check_for_update();
     if (res && res.available) {
-      showUpdateBanner(res.version, res.url);
+      showUpdateBanner(res.version, res.url, !!res.edition);
     }
   } catch (e) {
     // Silencieux : pas de connexion, serveur indisponible... l'appli
@@ -163,13 +163,21 @@ async function checkForUpdate() {
   }
 }
 
-function showUpdateBanner(version, url) {
+// `edition` distingue une vraie mise à jour de cette version Python
+// (numéro de version supérieur, ex. v0.2.9) d'une invitation à passer à
+// la réédition .NET/WPF (numérotée séparément, voir NOVAVOX2_RELEASES_URL
+// côté app.py) — le libellé doit rester clair sur ce que l'utilisateur
+// s'apprête à télécharger, pas juste "une version plus récente".
+function showUpdateBanner(version, url, edition) {
   if (document.getElementById("updateBanner")) return; // déjà affichée
   const banner = document.createElement("div");
   banner.id = "updateBanner";
   banner.className = "update-banner";
+  const label = edition
+    ? `🔔 Nouvelle édition de NovaVox disponible (.NET/WPF) : <strong>v${version}</strong>`
+    : `🔔 Nouvelle version disponible : <strong>v${version}</strong>`;
   banner.innerHTML = `
-    <span>🔔 Nouvelle version disponible : <strong>v${version}</strong></span>
+    <span>${label}</span>
     <div class="update-banner-actions">
       <button type="button" class="btn btn-accent btn-sm" id="updateBannerDownloadBtn">Télécharger</button>
       <button type="button" class="icon-btn" id="updateBannerCloseBtn">✕</button>
