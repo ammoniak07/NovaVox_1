@@ -46,6 +46,36 @@ public class GameLogAnnouncerTests
     }
 
     [Fact]
+    public void Build_HudNotification_SchemaReceived_UsesTemplateInsteadOfOverride()
+    {
+        var config = NewConfig();
+        var evt = new GameLogEvent { Type = GameLogEventTypes.HudNotification, Text = "Schémas reçu : Ezra" };
+
+        var result = GameLogAnnouncer.Build(evt, config);
+
+        Assert.NotNull(result);
+        Assert.Equal("schema_received", result!.Key);
+        Assert.Equal("Schémas reçu : Ezra", result.Text);
+        Assert.False(result.IsNewHudOverride);
+        Assert.Empty(config.GameLogHudOverrides);
+    }
+
+    [Fact]
+    public void Build_HudNotification_SchemaReceived_DifferentSchemaNamesShareSameCustomTemplate()
+    {
+        var config = NewConfig();
+        config.GameLogPhrases["schema_received"] = "Nouveau schéma de fabrication : {schema}";
+
+        var first = GameLogAnnouncer.Build(new GameLogEvent { Type = GameLogEventTypes.HudNotification, Text = "Schémas reçu : Ezra" }, config);
+        var second = GameLogAnnouncer.Build(new GameLogEvent { Type = GameLogEventTypes.HudNotification, Text = "Schémas reçu : Mantis" }, config);
+
+        Assert.Equal("Nouveau schéma de fabrication : Ezra", first!.Text);
+        Assert.Equal("Nouveau schéma de fabrication : Mantis", second!.Text);
+        Assert.Equal("Schémas reçu : Ezra", first.RawHudText);
+        Assert.Empty(config.GameLogHudOverrides);
+    }
+
+    [Fact]
     public void Build_HudNotification_EmptyAfterCleaning_ReturnsNull()
     {
         var config = NewConfig();

@@ -69,6 +69,15 @@ def _clean_hud_notification_text(text):
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
+# Notification HUD reconnue dans un vrai Game.log (ex. "Schémas reçu :
+# Ezra") à chaque récupération d'un schéma de fabrication. Plutôt que de
+# laisser ce texte retomber dans le mécanisme générique de "correction
+# HUD" (qui crée une entrée PAR nom de schéma différent rencontré), on le
+# reconnaît ici pour en extraire le nom et le faire passer par un gabarit
+# unique et réutilisable (voir DEFAULT_GAME_LOG_PHRASES["schema_received"]
+# et la branche "hud_notification" de _on_game_event ci-dessous).
+RE_SCHEMA_RECEIVED = re.compile(r"^Schémas reçu\s*:\s*(?P<schema>.+)$", re.IGNORECASE)
+
 # audioop est nettement plus rapide (implémentation C) que la mise à
 # l'échelle manuelle en Python pur pour ajuster le volume du micro, mais il
 # est déprécié depuis Python 3.11 et retiré à partir de 3.13 : on l'utilise
@@ -1046,6 +1055,7 @@ DEFAULT_GAME_LOG_PHRASES = {
     "zone_change": "Arrivée à destination : {zone}",
     "zone_change_no_zone": "Arrivée à destination",
     "hud_notification": "{text}",
+    "schema_received": "Schémas reçu : {schema}",
 }
 
 # Emoji affiché devant chaque phrase dans le journal (fixe, pas éditable :
@@ -1058,6 +1068,7 @@ GAME_LOG_PHRASE_EMOJI = {
     "zone_change": "🧭",
     "zone_change_no_zone": "🧭",
     "hud_notification": "📢",
+    "schema_received": "📢",
 }
 
 # Libellé + placeholder(s) disponibles pour chaque phrase, utilisé pour
@@ -1070,6 +1081,7 @@ GAME_LOG_PHRASE_META = {
     "zone_change": {"label": "Arrivée à destination (connue)", "placeholders": ["zone"]},
     "zone_change_no_zone": {"label": "Arrivée à destination (inconnue)", "placeholders": []},
     "hud_notification": {"label": "Notification affichée à l'écran (HUD)", "placeholders": ["text"]},
+    "schema_received": {"label": "Schémas de fabrication reçus", "placeholders": ["schema"]},
 }
 
 
@@ -5764,25 +5776,37 @@ class Api:
             raw_text = _clean_hud_notification_text(evt.get("text", ""))
             if not raw_text:
                 return
-            key = "hud_notification"
-            # Une correction de lecture exacte (voir
-            # set_game_log_hud_override) prend le pas sur le texte brut
-            # détecté dans le jeu — le journal affiche toujours le texte
-            # brut original juste en dessous, pour garder une trace fidèle
-            # de ce que le jeu a réellement affiché.
-            is_new = self._register_hud_text_seen(raw_text)
-            spoken_text = self.game_log_hud_overrides.get(raw_text.strip(), raw_text)
-            if spoken_text != raw_text:
-                hud_raw_text = raw_text
-            text = self._format_game_log_phrase(key, text=spoken_text)
-            if is_new:
-                # Fait apparaître la nouvelle notification dans la liste
-                # des corrections côté réglages, sans attendre une
-                # réouverture du panneau (voir gameLogHudOverrideAdded
-                # côté script.js).
-                self._push(
-                    f"gameLogHudOverrideAdded({json.dumps(raw_text.strip())}, {json.dumps(raw_text)})"
-                )
+            schema_m = RE_SCHEMA_RECEIVED.match(raw_text)
+            if schema_m:
+                # Schéma de fabrication reçu : passe par un gabarit
+                # unique ({schema}) plutôt que par le mécanisme générique
+                # de correction HUD ci-dessous, qui créerait sinon une
+                # entrée différente à chaque nouveau nom de schéma
+                # rencontré (voir RE_SCHEMA_RECEIVED).
+                key = "schema_received"
+                text = self._format_game_log_phrase(key, schema=schema_m.group("schema").strip())
+                if text != raw_text:
+                    hud_raw_text = raw_text
+            else:
+                key = "hud_notification"
+                # Une correction de lecture exacte (voir
+                # set_game_log_hud_override) prend le pas sur le texte brut
+                # détecté dans le jeu — le journal affiche toujours le texte
+                # brut original juste en dessous, pour garder une trace fidèle
+                # de ce que le jeu a réellement affiché.
+                is_new = self._register_hud_text_seen(raw_text)
+                spoken_text = self.game_log_hud_overrides.get(raw_text.strip(), raw_text)
+                if spoken_text != raw_text:
+                    hud_raw_text = raw_text
+                text = self._format_game_log_phrase(key, text=spoken_text)
+                if is_new:
+                    # Fait apparaître la nouvelle notification dans la liste
+                    # des corrections côté réglages, sans attendre une
+                    # réouverture du panneau (voir gameLogHudOverrideAdded
+                    # côté script.js).
+                    self._push(
+                        f"gameLogHudOverrideAdded({json.dumps(raw_text.strip())}, {json.dumps(raw_text)})"
+                    )
         elif etype == "nickname_detected":
             # Pré-remplit le handle RSI une seule fois, silencieusement,
             # si l'utilisateur ne l'avait pas encore renseigné.

@@ -20,6 +20,7 @@ public static partial class GameLogPhraseCatalog
         ["zone_change"] = "Arrivée à destination : {zone}",
         ["zone_change_no_zone"] = "Arrivée à destination",
         ["hud_notification"] = "{text}",
+        ["schema_received"] = "Schémas reçu : {schema}",
     };
 
     public static readonly IReadOnlyDictionary<string, string> Emoji = new Dictionary<string, string>
@@ -31,6 +32,7 @@ public static partial class GameLogPhraseCatalog
         ["zone_change"] = "🧭",
         ["zone_change_no_zone"] = "🧭",
         ["hud_notification"] = "📢",
+        ["schema_received"] = "📢",
     };
 
     public static readonly IReadOnlyDictionary<string, PhraseMeta> Meta = new Dictionary<string, PhraseMeta>
@@ -42,12 +44,13 @@ public static partial class GameLogPhraseCatalog
         ["zone_change"] = new("Arrivée à destination (connue)", new[] { "zone" }),
         ["zone_change_no_zone"] = new("Arrivée à destination (inconnue)", Array.Empty<string>()),
         ["hud_notification"] = new("Notification affichée à l'écran (HUD)", new[] { "text" }),
+        ["schema_received"] = new("Schémas de fabrication reçus", new[] { "schema" }),
     };
 
     public static readonly IReadOnlyList<string> OrderedKeys = new[]
     {
         "route_set", "route_set_no_dest", "jump_start", "jump_start_no_dest",
-        "zone_change", "zone_change_no_zone", "hud_notification",
+        "zone_change", "zone_change_no_zone", "hud_notification", "schema_received",
     };
 
     [GeneratedRegex(@"\{(\w*)\}")]

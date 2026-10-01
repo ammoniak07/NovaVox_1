@@ -42,6 +42,16 @@ public static partial class GameLogAnnouncer
     [GeneratedRegex(@"\s+")]
     private static partial Regex MultiSpaceRegex();
 
+    /// <summary>
+    /// Notification HUD reconnue dans un vrai Game.log (ex. "Schémas reçu :
+    /// Ezra") à chaque récupération d'un schéma de fabrication — voir
+    /// RE_SCHEMA_RECEIVED (app.py). Reconnue ici plutôt que de passer par
+    /// le mécanisme générique de correction HUD, qui créerait sinon une
+    /// entrée différente à chaque nouveau nom de schéma rencontré.
+    /// </summary>
+    [GeneratedRegex(@"^Schémas reçu\s*:\s*(?<schema>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SchemaReceivedRegex();
+
     /// <summary>Port de _clean_hud_notification_text.</summary>
     public static string CleanHudNotificationText(string? text)
     {
@@ -108,6 +118,22 @@ public static partial class GameLogAnnouncer
     {
         var rawText = CleanHudNotificationText(evt.Text);
         if (rawText.Length == 0) return null;
+
+        var schemaMatch = SchemaReceivedRegex().Match(rawText);
+        if (schemaMatch.Success)
+        {
+            const string schemaKey = "schema_received";
+            var schemaText = GameLogPhraseCatalog.Format(
+                schemaKey, config.GameLogPhrases,
+                new Dictionary<string, string> { ["schema"] = schemaMatch.Groups["schema"].Value.Trim() });
+
+            return new GameLogAnnouncement(
+                schemaKey, schemaText, GameLogPhraseCatalog.Emoji.GetValueOrDefault(schemaKey, ""),
+                RawHudText: schemaText != rawText ? rawText : null,
+                IsNewDestinationAlias: false, DestinationAliasKey: null,
+                IsNewHudOverride: false, HudOverrideKey: null,
+                UnresolvedDestinationWarning: false, UnresolvedDestinationRawId: null);
+        }
 
         var trimmedKey = rawText.Trim();
         var isNew = false;
