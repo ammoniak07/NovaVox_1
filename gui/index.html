@@ -250,6 +250,17 @@
           </div>
 
           <div class="control-row">
+            <label for="frenchNumberStyleSelect">Prononciation des nombres</label>
+            <select id="frenchNumberStyleSelect">
+              <option value="france">Français (France) — soixante-dix, quatre-vingt-dix</option>
+              <option value="belgique">Français (Belgique) — septante, nonante</option>
+            </select>
+            <p class="mic-gain-hint">
+              Choisit comment la voix lit les nombres à voix haute (ex. montants en aUEC détectés dans le Game.log).
+            </p>
+          </div>
+
+          <div class="control-row">
             <label for="micGainRange">
               Volume du micro (amplification interne)
               <span class="mic-gain-value" id="micGainValue">100 %</span>
@@ -550,19 +561,6 @@
               <input type="checkbox" id="radioEffectToggle" />
               🛰️ Effet « communication vaisseau » (filtre radio léger)
             </label>
-
-            <div class="ai-setting" style="margin: 4px 0 10px;">
-              <label for="frenchNumberStyleSelect">Prononciation des nombres</label>
-              <div class="ai-setting-control">
-                <select id="frenchNumberStyleSelect">
-                  <option value="france">Français (France) — soixante-dix, quatre-vingt-dix</option>
-                  <option value="belgique">Français (Belgique) — septante, nonante</option>
-                </select>
-              </div>
-              <p class="ai-setting-desc">
-                Choisit comment la voix lit les nombres à voix haute (ex. montants en aUEC détectés dans le Game.log).
-              </p>
-            </div>
 
             <div id="piperPanel" class="piper-panel">
               <div id="piperNotInstalled">

@@ -892,11 +892,28 @@ function openSettings() {
   switchSettingsTab("sons");
   loadMicDevices();
   loadOutputDevices();
+  loadFrenchNumberStyle();
   if (!state.listening) {
     window.pywebview.api.start_mic_monitor();
   }
   refreshOverlayUI();
   refreshAutoLaunchUI();
+}
+
+// Le reste des réglages "voix" partagés (effet radio, moteur Piper...) n'est
+// chargé que lors de l'ouverture de l'onglet 🌟 IA Gemini (voir
+// loadGeminiSettingsTab), mais le sélecteur ci-dessous vit dans l'onglet
+// 🔊 Sons (actif par défaut à l'ouverture des réglages) : il a donc besoin
+// de son propre petit chargement, sinon il resterait affiché sur sa valeur
+// HTML par défaut tant que l'utilisateur n'aurait pas aussi ouvert l'onglet
+// Gemini au moins une fois.
+async function loadFrenchNumberStyle() {
+  try {
+    const misc = await window.pywebview.api.misc_get_state();
+    document.getElementById("frenchNumberStyleSelect").value = misc.frenchNumberStyle || "france";
+  } catch (e) {
+    // réglage non disponible, ignore
+  }
 }
 
 function closeSettings() {
@@ -2808,7 +2825,6 @@ async function loadGeminiSettingsTab() {
 
     state.piperVoice = misc.piperVoice || null;
     document.getElementById("radioEffectToggle").checked = !!misc.radioEffect;
-    document.getElementById("frenchNumberStyleSelect").value = misc.frenchNumberStyle || "france";
     setPiperSpeedValue(misc.piperLengthScale ?? 1.0);
     setPiperExpressivenessValue(misc.piperNoiseScale ?? 0.667);
     await refreshPiperStatus();
