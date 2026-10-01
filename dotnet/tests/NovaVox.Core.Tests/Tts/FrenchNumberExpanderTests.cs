@@ -36,6 +36,45 @@ public class FrenchNumberExpanderTests
         Assert.Equal(expected, FrenchNumberExpander.IntegerToWords(n));
     }
 
+    // Références calculées directement avec _integer_to_french_words(n, "belgique") (app.py).
+    [Theory]
+    [InlineData(70, "septante")]
+    [InlineData(71, "septante et un")]
+    [InlineData(72, "septante-deux")]
+    [InlineData(79, "septante-neuf")]
+    [InlineData(80, "quatre-vingts")]
+    [InlineData(81, "quatre-vingt-un")]
+    [InlineData(90, "nonante")]
+    [InlineData(91, "nonante et un")]
+    [InlineData(99, "nonante-neuf")]
+    [InlineData(171, "cent septante et un")]
+    [InlineData(191, "cent nonante et un")]
+    [InlineData(70000, "septante mille")]
+    [InlineData(90000, "nonante mille")]
+    [InlineData(1980, "mille neuf cent quatre-vingts")]
+    public void IntegerToWords_BelgiqueStyle_UsesSeptanteNonante(long n, string expected)
+    {
+        Assert.Equal(expected, FrenchNumberExpander.IntegerToWords(n, FrenchNumberStyle.Belgique));
+    }
+
+    [Fact]
+    public void Expand_BelgiqueStyle_IsUsedWhenPassedThrough()
+    {
+        var result = FrenchNumberExpander.Expand("Amende de 90 000 aUEC.", FrenchNumberStyle.Belgique);
+        Assert.Equal("Amende de nonante mille aUEC.", result);
+    }
+
+    [Theory]
+    [InlineData("france")]
+    [InlineData("belgique")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void ParseStyle_OnlyBelgiqueMapsToBelgique(string? value)
+    {
+        var expected = value == "belgique" ? FrenchNumberStyle.Belgique : FrenchNumberStyle.France;
+        Assert.Equal(expected, FrenchNumberExpander.ParseStyle(value));
+    }
+
     [Fact]
     public void Expand_PlainLargeNumber_IsSpokenAsWordsNotDigitByDigit()
     {

@@ -325,6 +325,7 @@ public partial class MainWindow : Window
             SelectComboItemByTag(GeminiResponseLengthCombo, ai.GeminiResponseLength);
             GeminiContextBox.Text = ai.GeminiCustomContext;
             RadioEffectCheckbox.IsChecked = ai.RadioEffect;
+            SelectComboItemByTag(FrenchNumberStyleCombo, ai.FrenchNumberStyle);
             PiperLengthScaleSlider.Value = ai.PiperLengthScale;
             PiperNoiseScaleSlider.Value = ai.PiperNoiseScale;
 
@@ -495,6 +496,17 @@ public partial class MainWindow : Window
         if (_loadingSettings) return;
         _state.Ai.RadioEffect = RadioEffectCheckbox.IsChecked ?? false;
         _state.SaveAi();
+    }
+
+    private void FrenchNumberStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSettings) return;
+        if (FrenchNumberStyleCombo.SelectedItem is ComboBoxItem { Tag: string tag })
+        {
+            _state.Ai.FrenchNumberStyle = tag;
+            _state.SaveAi();
+            if (_testTts is not null) _testTts.NumberStyle = FrenchNumberExpander.ParseStyle(tag);
+        }
     }
 
     private void PiperLengthScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -877,6 +889,7 @@ public partial class MainWindow : Window
         _testTts.LengthScale = _state.Ai.PiperLengthScale;
         _testTts.NoiseScale = _state.Ai.PiperNoiseScale;
         _testTts.RadioEffectEnabled = _state.Ai.RadioEffect;
+        _testTts.NumberStyle = FrenchNumberExpander.ParseStyle(_state.Ai.FrenchNumberStyle);
         _testTts.Volume = _state.Audio.TtsVolume;
         _testTts.OutputDeviceName = _state.Audio.OutputDevice;
     }

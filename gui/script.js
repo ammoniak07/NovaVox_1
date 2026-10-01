@@ -337,6 +337,9 @@ function bindEvents() {
 
   document.getElementById("piperInstallBtn").addEventListener("click", onPiperInstallClick);
   document.getElementById("radioEffectToggle").addEventListener("change", onRadioEffectToggle);
+  document.getElementById("frenchNumberStyleSelect").addEventListener("change", async (e) => {
+    await window.pywebview.api.ai_set_french_number_style(e.target.value);
+  });
   document.getElementById("piperShowAllLangsToggle").addEventListener("change", () => {
     renderPiperVoices(piperLastVoices);
   });
@@ -2805,6 +2808,7 @@ async function loadGeminiSettingsTab() {
 
     state.piperVoice = misc.piperVoice || null;
     document.getElementById("radioEffectToggle").checked = !!misc.radioEffect;
+    document.getElementById("frenchNumberStyleSelect").value = misc.frenchNumberStyle || "france";
     setPiperSpeedValue(misc.piperLengthScale ?? 1.0);
     setPiperExpressivenessValue(misc.piperNoiseScale ?? 0.667);
     await refreshPiperStatus();

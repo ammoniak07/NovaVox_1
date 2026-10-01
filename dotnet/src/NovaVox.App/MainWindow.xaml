@@ -281,6 +281,12 @@
                                          VerticalScrollBarVisibility="Auto" LostFocus="GeminiContextBox_LostFocus" />
                                 <CheckBox x:Name="RadioEffectCheckbox" Content="Effet radio de vaisseau" Margin="0,16,0,0" Checked="RadioEffectCheckbox_Changed" Unchecked="RadioEffectCheckbox_Changed" />
 
+                                <TextBlock Text="Prononciation des nombres" Margin="0,12,0,4" />
+                                <ComboBox x:Name="FrenchNumberStyleCombo" SelectionChanged="FrenchNumberStyleCombo_SelectionChanged">
+                                    <ComboBoxItem Content="Français (France) — soixante-dix, quatre-vingt-dix" Tag="france" />
+                                    <ComboBoxItem Content="Français (Belgique) — septante, nonante" Tag="belgique" />
+                                </ComboBox>
+
                                 <TextBlock Text="Moteur vocal (Piper)" FontWeight="Bold" Margin="0,16,0,6" />
                                 <StackPanel Orientation="Horizontal">
                                     <Button x:Name="InstallPiperEngineButton" Content="Installer le moteur Piper" Click="InstallPiperEngine_Click" />

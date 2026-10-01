@@ -3,6 +3,15 @@ using System.Text.RegularExpressions;
 
 namespace NovaVox.Core.Tts;
 
+/// <summary>Variante de prononciation des nombres 70-79/90-99 — voir FrenchNumberExpander.</summary>
+public enum FrenchNumberStyle
+{
+    /// <summary>soixante-dix, quatre-vingt-dix.</summary>
+    France,
+    /// <summary>septante, nonante (80 reste "quatre-vingts" dans les deux variantes).</summary>
+    Belgique,
+}
+
 /// <summary>
 /// Convertit les nombres entiers d'un texte en toutes lettres françaises
 /// avant synthèse vocale — port de _integer_to_french_words /
@@ -26,9 +35,21 @@ public static partial class FrenchNumberExpander
     private static readonly string[] TeenWords =
         { "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf" };
 
-    private static readonly IReadOnlyDictionary<int, string> TensWords = new Dictionary<int, string>
+    // Variante France : 70/90 construits sur soixante/quatre-vingt (soixante-dix,
+    // quatre-vingt-dix), gérés à part dans Below100ToWords. Variante Belgique :
+    // 70/90 sont des dizaines à part entière (septante, nonante), donc
+    // directement dans cette table comme les autres — 80 reste "quatre-vingt"
+    // dans les deux variantes (l'huitante/octante belgo-suisse reste trop
+    // minoritaire, y compris en Belgique, pour être couvert ici).
+    private static readonly IReadOnlyDictionary<int, string> TensWordsFrance = new Dictionary<int, string>
     {
         [2] = "vingt", [3] = "trente", [4] = "quarante", [5] = "cinquante", [6] = "soixante", [8] = "quatre-vingt",
+    };
+
+    private static readonly IReadOnlyDictionary<int, string> TensWordsBelgique = new Dictionary<int, string>
+    {
+        [2] = "vingt", [3] = "trente", [4] = "quarante", [5] = "cinquante", [6] = "soixante",
+        [7] = "septante", [8] = "quatre-vingt", [9] = "nonante",
     };
 
     /// <summary>
@@ -47,12 +68,16 @@ public static partial class FrenchNumberExpander
     [GeneratedRegex(@"[  ]")]
     private static partial Regex GroupSeparatorRegex();
 
+    /// <summary>Convertit la valeur persistée dans AiConfig.FrenchNumberStyle ("france"/"belgique") en <see cref="FrenchNumberStyle"/>.</summary>
+    public static FrenchNumberStyle ParseStyle(string? value) =>
+        value == "belgique" ? FrenchNumberStyle.Belgique : FrenchNumberStyle.France;
+
     /// <summary>
     /// Remplace tout nombre entier détecté dans le texte par son écriture
     /// en toutes lettres françaises, pour que Piper le prononce
     /// correctement au lieu de l'épeler chiffre par chiffre.
     /// </summary>
-    public static string Expand(string? text)
+    public static string Expand(string? text, FrenchNumberStyle style = FrenchNumberStyle.France)
     {
         if (string.IsNullOrEmpty(text)) return text ?? "";
 
@@ -60,7 +85,7 @@ public static partial class FrenchNumberExpander
         {
             var digits = GroupSeparatorRegex().Replace(m.Value, "");
             return long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var n)
-                ? IntegerToWords(n)
+                ? IntegerToWords(n, style)
                 : m.Value;
         });
 
@@ -74,20 +99,20 @@ public static partial class FrenchNumberExpander
                 return digits;
             }
             return long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var n)
-                ? IntegerToWords(n)
+                ? IntegerToWords(n, style)
                 : digits;
         });
     }
 
     /// <summary>
     /// Convertit un entier (positif, négatif ou nul) en toutes lettres
-    /// françaises standard (pas de septante/octante/nonante belges/suisses,
-    /// cohérent avec le reste de l'appli).
+    /// françaises — France (soixante-dix/quatre-vingt-dix) ou Belgique
+    /// (septante/nonante).
     /// </summary>
-    public static string IntegerToWords(long n)
+    public static string IntegerToWords(long n, FrenchNumberStyle style = FrenchNumberStyle.France)
     {
         if (n == 0) return "zéro";
-        if (n < 0) return "moins " + IntegerToWords(-n);
+        if (n < 0) return "moins " + IntegerToWords(-n, style);
 
         var billions = n / 1_000_000_000;
         var rem = n % 1_000_000_000;
@@ -98,13 +123,13 @@ public static partial class FrenchNumberExpander
 
         var parts = new List<string>();
         if (billions > 0)
-            parts.Add(GroupToWords((int)billions, allowPluralExceptions: false) + (billions == 1 ? " milliard" : " milliards"));
+            parts.Add(GroupToWords((int)billions, allowPluralExceptions: false, style) + (billions == 1 ? " milliard" : " milliards"));
         if (millions > 0)
-            parts.Add(GroupToWords((int)millions, allowPluralExceptions: false) + (millions == 1 ? " million" : " millions"));
+            parts.Add(GroupToWords((int)millions, allowPluralExceptions: false, style) + (millions == 1 ? " million" : " millions"));
         if (thousands > 0)
-            parts.Add(thousands == 1 ? "mille" : $"{GroupToWords((int)thousands, allowPluralExceptions: false)} mille");
+            parts.Add(thousands == 1 ? "mille" : $"{GroupToWords((int)thousands, allowPluralExceptions: false, style)} mille");
         if (units > 0 || parts.Count == 0)
-            parts.Add(GroupToWords((int)units, allowPluralExceptions: true));
+            parts.Add(GroupToWords((int)units, allowPluralExceptions: true, style));
 
         return string.Join(" ", parts.Where(p => p.Length > 0));
     }
@@ -117,7 +142,7 @@ public static partial class FrenchNumberExpander
     /// "mille"/"million" (ex. "quatre-vingt mille", jamais "quatre-vingts
     /// mille").
     /// </summary>
-    private static string GroupToWords(int n, bool allowPluralExceptions)
+    private static string GroupToWords(int n, bool allowPluralExceptions, FrenchNumberStyle style)
     {
         var hundreds = n / 100;
         var rem = n % 100;
@@ -126,7 +151,7 @@ public static partial class FrenchNumberExpander
         if (hundreds > 0)
             parts.Add(hundreds == 1 ? "cent" : $"{UnitsWords[hundreds]} cent");
         if (rem > 0)
-            parts.Add(Below100ToWords(rem));
+            parts.Add(Below100ToWords(rem, style));
 
         var text = string.Join(" ", parts);
         if (allowPluralExceptions)
@@ -138,21 +163,24 @@ public static partial class FrenchNumberExpander
     }
 
     /// <summary>n dans 1..99.</summary>
-    private static string Below100ToWords(int n)
+    private static string Below100ToWords(int n, FrenchNumberStyle style)
     {
         if (n < 10) return UnitsWords[n];
         if (n < 20) return TeenWords[n - 10];
-        if (n is >= 70 and < 80) // soixante-dix..soixante-dix-neuf ("et" seulement à 71)
+        if (style == FrenchNumberStyle.France)
         {
-            var rem = n - 60;
-            return rem == 11 ? "soixante et onze" : $"soixante-{TeenWords[rem - 10]}";
+            if (n is >= 70 and < 80) // soixante-dix..soixante-dix-neuf ("et" seulement à 71)
+            {
+                var rem = n - 60;
+                return rem == 11 ? "soixante et onze" : $"soixante-{TeenWords[rem - 10]}";
+            }
+            if (n is >= 90 and < 100) // quatre-vingt-dix..quatre-vingt-dix-neuf (jamais de "et")
+                return $"quatre-vingt-{TeenWords[n - 90]}";
         }
-        if (n is >= 90 and < 100) // quatre-vingt-dix..quatre-vingt-dix-neuf (jamais de "et")
-            return $"quatre-vingt-{TeenWords[n - 90]}";
 
         var tens = n / 10;
         var units = n % 10;
-        var baseWord = TensWords[tens];
+        var baseWord = (style == FrenchNumberStyle.Belgique ? TensWordsBelgique : TensWordsFrance)[tens];
         if (units == 0) return baseWord;
         if (units == 1 && tens != 8) return $"{baseWord} et un"; // sauf après quatre-vingt (quatre-vingt-un)
         return $"{baseWord}-{UnitsWords[units]}";

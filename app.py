@@ -86,22 +86,32 @@ def _clean_hud_notification_text(text):
 # comment prononcer un chiffre.
 _UNITS_WORDS = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
 _TEEN_WORDS = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
-_TENS_WORDS = {2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante", 8: "quatre-vingt"}
+# Variante "France" : 70/90 construits sur soixante/quatre-vingt (soixante-dix,
+# quatre-vingt-dix), gérés à part dans _below_100_to_words. Variante
+# "Belgique" : 70/90 sont des dizaines à part entière (septante, nonante),
+# donc directement dans cette table comme les autres — 80 reste
+# "quatre-vingt" dans les deux variantes (l'huitante/octante belgo-suisse
+# reste trop minoritaire, y compris en Belgique, pour être couvert ici).
+_TENS_WORDS_FRANCE = {2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante", 8: "quatre-vingt"}
+_TENS_WORDS_BELGIQUE = {2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante", 7: "septante", 8: "quatre-vingt", 9: "nonante"}
+FRENCH_NUMBER_STYLES = {"france", "belgique"}
+DEFAULT_FRENCH_NUMBER_STYLE = "france"
 
 
-def _below_100_to_words(n):
+def _below_100_to_words(n, style=DEFAULT_FRENCH_NUMBER_STYLE):
     """n dans 1..99."""
     if n < 10:
         return _UNITS_WORDS[n]
     if n < 20:
         return _TEEN_WORDS[n - 10]
-    if 70 <= n < 80:  # soixante-dix..soixante-dix-neuf ("et" seulement à 71)
-        rem = n - 60
-        return "soixante et onze" if rem == 11 else f"soixante-{_TEEN_WORDS[rem - 10]}"
-    if 90 <= n < 100:  # quatre-vingt-dix..quatre-vingt-dix-neuf (jamais de "et")
-        return f"quatre-vingt-{_TEEN_WORDS[n - 90]}"
+    if style == "france":
+        if 70 <= n < 80:  # soixante-dix..soixante-dix-neuf ("et" seulement à 71)
+            rem = n - 60
+            return "soixante et onze" if rem == 11 else f"soixante-{_TEEN_WORDS[rem - 10]}"
+        if 90 <= n < 100:  # quatre-vingt-dix..quatre-vingt-dix-neuf (jamais de "et")
+            return f"quatre-vingt-{_TEEN_WORDS[n - 90]}"
     tens, units = divmod(n, 10)
-    base = _TENS_WORDS[tens]
+    base = (_TENS_WORDS_BELGIQUE if style == "belgique" else _TENS_WORDS_FRANCE)[tens]
     if units == 0:
         return base
     if units == 1 and tens != 8:  # "et un" sauf après quatre-vingt (quatre-vingt-un)
@@ -109,7 +119,7 @@ def _below_100_to_words(n):
     return f"{base}-{_UNITS_WORDS[units]}"
 
 
-def _group_to_words(n, allow_plural_exceptions):
+def _group_to_words(n, allow_plural_exceptions, style=DEFAULT_FRENCH_NUMBER_STYLE):
     """Convertit un groupe 0..999 en lettres. allow_plural_exceptions
     n'est vrai que pour le groupe des unités (0-999) final du nombre
     complet : seul celui-ci peut porter le 's' de "cents"/"vingts", qui
@@ -121,7 +131,7 @@ def _group_to_words(n, allow_plural_exceptions):
     if hundreds:
         parts.append("cent" if hundreds == 1 else f"{_UNITS_WORDS[hundreds]} cent")
     if rem:
-        parts.append(_below_100_to_words(rem))
+        parts.append(_below_100_to_words(rem, style))
     text = " ".join(parts)
     if allow_plural_exceptions:
         if rem == 0 and hundreds >= 2:
@@ -131,14 +141,14 @@ def _group_to_words(n, allow_plural_exceptions):
     return text
 
 
-def _integer_to_french_words(n):
+def _integer_to_french_words(n, style=DEFAULT_FRENCH_NUMBER_STYLE):
     """Convertit un entier (positif, négatif ou nul) en toutes lettres
-    françaises standard (pas de septante/octante/nonante belges/suisses,
-    cohérent avec le reste de l'appli)."""
+    françaises — "france" (soixante-dix/quatre-vingt-dix) ou "belgique"
+    (septante/nonante), voir FRENCH_NUMBER_STYLES."""
     if n == 0:
         return "zéro"
     if n < 0:
-        return "moins " + _integer_to_french_words(-n)
+        return "moins " + _integer_to_french_words(-n, style)
 
     billions, rem = divmod(n, 1_000_000_000)
     millions, rem = divmod(rem, 1_000_000)
@@ -146,13 +156,13 @@ def _integer_to_french_words(n):
 
     parts = []
     if billions:
-        parts.append(_group_to_words(billions, False) + (" milliard" if billions == 1 else " milliards"))
+        parts.append(_group_to_words(billions, False, style) + (" milliard" if billions == 1 else " milliards"))
     if millions:
-        parts.append(_group_to_words(millions, False) + (" million" if millions == 1 else " millions"))
+        parts.append(_group_to_words(millions, False, style) + (" million" if millions == 1 else " millions"))
     if thousands:
-        parts.append("mille" if thousands == 1 else f"{_group_to_words(thousands, False)} mille")
+        parts.append("mille" if thousands == 1 else f"{_group_to_words(thousands, False, style)} mille")
     if units or not parts:
-        parts.append(_group_to_words(units, True))
+        parts.append(_group_to_words(units, True, style))
     return " ".join(p for p in parts if p)
 
 
@@ -165,13 +175,14 @@ _RE_GROUPED_NUMBER = re.compile(r"\d{1,3}(?:[  ]\d{3})+")
 _RE_PLAIN_NUMBER = re.compile(r"\b\d+\b")
 
 
-def _expand_numbers_for_speech(text):
+def _expand_numbers_for_speech(text, style=DEFAULT_FRENCH_NUMBER_STYLE):
     """Remplace tout nombre entier détecté dans le texte par son écriture
-    en toutes lettres françaises, pour que Piper le prononce correctement
-    au lieu de l'épeler chiffre par chiffre (voir le constat plus haut)."""
+    en toutes lettres françaises (voir FRENCH_NUMBER_STYLES pour la
+    variante), pour que Piper le prononce correctement au lieu de
+    l'épeler chiffre par chiffre (voir le constat plus haut)."""
     def _replace_grouped(m):
         digits = re.sub(r"[  ]", "", m.group(0))
-        return _integer_to_french_words(int(digits))
+        return _integer_to_french_words(int(digits), style)
 
     text = _RE_GROUPED_NUMBER.sub(_replace_grouped, text)
 
@@ -181,7 +192,7 @@ def _expand_numbers_for_speech(text):
             # Zéro(s) non significatif en tête (ex. "007", horaire) : pas
             # un vrai cardinal, le convertir donnerait un résultat faux.
             return digits
-        return _integer_to_french_words(int(digits))
+        return _integer_to_french_words(int(digits), style)
 
     return _RE_PLAIN_NUMBER.sub(_replace_plain, text)
 
@@ -1979,6 +1990,7 @@ def load_ai_config():
         "piper_length_scale": DEFAULT_PIPER_LENGTH_SCALE,
         "piper_noise_scale": DEFAULT_PIPER_NOISE_SCALE,
         "radio_effect": DEFAULT_RADIO_EFFECT,
+        "french_number_style": DEFAULT_FRENCH_NUMBER_STYLE,
         "game_log_enabled": False,
         "game_log_announce_events": True,
         "game_log_player_handle": "",
@@ -2014,6 +2026,8 @@ def load_ai_config():
             except (TypeError, ValueError):
                 config["piper_noise_scale"] = DEFAULT_PIPER_NOISE_SCALE
             config["radio_effect"] = bool(config["radio_effect"])
+            if config.get("french_number_style") not in FRENCH_NUMBER_STYLES:
+                config["french_number_style"] = DEFAULT_FRENCH_NUMBER_STYLE
             config["gemini_enabled"] = bool(config.get("gemini_enabled", True))
             config["game_log_enabled"] = bool(config["game_log_enabled"])
             config["game_log_announce_events"] = bool(config["game_log_announce_events"])
@@ -2779,6 +2793,9 @@ class Api:
         self.piper_length_scale = ai_config.get("piper_length_scale", DEFAULT_PIPER_LENGTH_SCALE)
         self.piper_noise_scale = ai_config.get("piper_noise_scale", DEFAULT_PIPER_NOISE_SCALE)
         self.radio_effect = bool(ai_config.get("radio_effect", DEFAULT_RADIO_EFFECT))
+        self.french_number_style = ai_config.get("french_number_style", DEFAULT_FRENCH_NUMBER_STYLE)
+        if self.french_number_style not in FRENCH_NUMBER_STYLES:
+            self.french_number_style = DEFAULT_FRENCH_NUMBER_STYLE
         # Surveillance en temps réel du Game.log de Star Citizen (kills,
         # morts, destructions de vaisseau, changements de zone...) — voir
         # game_log_watcher.py. Désactivée par défaut : c'est une fonction
@@ -3913,6 +3930,7 @@ class Api:
         self.piper_length_scale = DEFAULT_PIPER_LENGTH_SCALE
         self.piper_noise_scale = DEFAULT_PIPER_NOISE_SCALE
         self.radio_effect = DEFAULT_RADIO_EFFECT
+        self.french_number_style = DEFAULT_FRENCH_NUMBER_STYLE
         self.game_log_enabled = False
         self.game_log_announce = True
         self.game_log_player_handle = ""
@@ -3941,6 +3959,7 @@ class Api:
             "piper_length_scale": self.piper_length_scale,
             "piper_noise_scale": self.piper_noise_scale,
             "radio_effect": self.radio_effect,
+            "french_number_style": self.french_number_style,
             "game_log_enabled": self.game_log_enabled,
             "game_log_announce_events": self.game_log_announce,
             "game_log_player_handle": self.game_log_player_handle,
@@ -5114,6 +5133,7 @@ class Api:
             "piperLengthScale": (1.0 / self.piper_length_scale) if self.piper_length_scale else 1.0,
             "piperNoiseScale": self.piper_noise_scale,
             "radioEffect": self.radio_effect,
+            "frenchNumberStyle": self.french_number_style,
             "gameLogEnabled": self.game_log_enabled,
             "gameLogAnnounce": self.game_log_announce,
             "gameLogPlayerHandle": self.game_log_player_handle,
@@ -5610,6 +5630,7 @@ class Api:
             "piper_length_scale": self.piper_length_scale,
             "piper_noise_scale": self.piper_noise_scale,
             "radio_effect": self.radio_effect,
+            "french_number_style": self.french_number_style,
             "game_log_enabled": self.game_log_enabled,
             "game_log_announce_events": self.game_log_announce,
             "game_log_player_handle": self.game_log_player_handle,
@@ -5979,6 +6000,16 @@ class Api:
         self._persist_ai_config()
         return self.radio_effect
 
+    def ai_set_french_number_style(self, style):
+        """Choisit la variante de prononciation des nombres en français
+        pour la synthèse vocale : "france" (soixante-dix/quatre-vingt-dix)
+        ou "belgique" (septante/nonante) — voir FRENCH_NUMBER_STYLES."""
+        if style not in FRENCH_NUMBER_STYLES:
+            return self.french_number_style
+        self.french_number_style = style
+        self._persist_ai_config()
+        return self.french_number_style
+
     def ai_set_user_name(self, name):
         """Enregistre le prénom de l'utilisateur (profil), pour que
         l'assistant puisse s'adresser à lui/elle nommément plutôt que de
@@ -6256,7 +6287,7 @@ class Api:
         if not text:
             return
         text = self._strip_markdown_for_speech(text)
-        text = _expand_numbers_for_speech(text)
+        text = _expand_numbers_for_speech(text, self.french_number_style)
         self._tts_queue.put({
             "text": text,
             "piper_voice": piper_voice if piper_voice is not None else self.piper_voice,
