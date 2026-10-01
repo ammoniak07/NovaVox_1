@@ -69,6 +69,123 @@ def _clean_hud_notification_text(text):
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
+
+# --------------------------------------------------------------------------
+# Conversion nombre -> lettres françaises, pour la synthèse vocale (Piper).
+#
+# CONSTAT (vérifié en usage réel) : Piper épelle chiffre par chiffre tout
+# nombre un peu long faute de séparateur qu'il reconnaisse (ex. "40000"
+# lu "quatre zéro zéro zéro zéro" au lieu de "quarante mille", "1000000"
+# lu "un zéro zéro zéro zéro zéro zéro zéro" au lieu de "un million") —
+# typiquement les montants en aUEC des notifications HUD de dons/amendes
+# (voir RE_SCHEMA_RECEIVED ci-dessus pour un autre cas de texte HUD
+# reconnu spécifiquement). Plutôt que de dépendre du normaliseur de
+# nombres intégré à Piper, _expand_numbers_for_speech() convertit ici
+# tout nombre entier détecté dans un texte en toutes lettres AVANT de
+# l'envoyer à Piper (voir _speak()), qui n'a alors plus jamais à décider
+# comment prononcer un chiffre.
+_UNITS_WORDS = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
+_TEEN_WORDS = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
+_TENS_WORDS = {2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante", 8: "quatre-vingt"}
+
+
+def _below_100_to_words(n):
+    """n dans 1..99."""
+    if n < 10:
+        return _UNITS_WORDS[n]
+    if n < 20:
+        return _TEEN_WORDS[n - 10]
+    if 70 <= n < 80:  # soixante-dix..soixante-dix-neuf ("et" seulement à 71)
+        rem = n - 60
+        return "soixante et onze" if rem == 11 else f"soixante-{_TEEN_WORDS[rem - 10]}"
+    if 90 <= n < 100:  # quatre-vingt-dix..quatre-vingt-dix-neuf (jamais de "et")
+        return f"quatre-vingt-{_TEEN_WORDS[n - 90]}"
+    tens, units = divmod(n, 10)
+    base = _TENS_WORDS[tens]
+    if units == 0:
+        return base
+    if units == 1 and tens != 8:  # "et un" sauf après quatre-vingt (quatre-vingt-un)
+        return f"{base} et un"
+    return f"{base}-{_UNITS_WORDS[units]}"
+
+
+def _group_to_words(n, allow_plural_exceptions):
+    """Convertit un groupe 0..999 en lettres. allow_plural_exceptions
+    n'est vrai que pour le groupe des unités (0-999) final du nombre
+    complet : seul celui-ci peut porter le 's' de "cents"/"vingts", qui
+    ne s'applique jamais quand le groupe est suivi d'un mot comme
+    "mille"/"million" (ex. "quatre-vingt mille", jamais "quatre-vingts
+    mille")."""
+    hundreds, rem = divmod(n, 100)
+    parts = []
+    if hundreds:
+        parts.append("cent" if hundreds == 1 else f"{_UNITS_WORDS[hundreds]} cent")
+    if rem:
+        parts.append(_below_100_to_words(rem))
+    text = " ".join(parts)
+    if allow_plural_exceptions:
+        if rem == 0 and hundreds >= 2:
+            text += "s"  # "deux cents"
+        elif rem == 80:
+            text += "s"  # "quatre-vingts"
+    return text
+
+
+def _integer_to_french_words(n):
+    """Convertit un entier (positif, négatif ou nul) en toutes lettres
+    françaises standard (pas de septante/octante/nonante belges/suisses,
+    cohérent avec le reste de l'appli)."""
+    if n == 0:
+        return "zéro"
+    if n < 0:
+        return "moins " + _integer_to_french_words(-n)
+
+    billions, rem = divmod(n, 1_000_000_000)
+    millions, rem = divmod(rem, 1_000_000)
+    thousands, units = divmod(rem, 1000)
+
+    parts = []
+    if billions:
+        parts.append(_group_to_words(billions, False) + (" milliard" if billions == 1 else " milliards"))
+    if millions:
+        parts.append(_group_to_words(millions, False) + (" million" if millions == 1 else " millions"))
+    if thousands:
+        parts.append("mille" if thousands == 1 else f"{_group_to_words(thousands, False)} mille")
+    if units or not parts:
+        parts.append(_group_to_words(units, True))
+    return " ".join(p for p in parts if p)
+
+
+# Nombre groupé par milliers avec un espace (normal ou insécable, les deux
+# étant vus en pratique selon la source du texte) comme séparateur, ex.
+# "40 000" ou "1 234 567" — reconnu et "dégroupé" AVANT la conversion
+# chiffre-par-chiffre ci-dessous, sans quoi "40 000" serait lu comme deux
+# nombres séparés ("quarante", puis "zéro").
+_RE_GROUPED_NUMBER = re.compile(r"\d{1,3}(?:[  ]\d{3})+")
+_RE_PLAIN_NUMBER = re.compile(r"\b\d+\b")
+
+
+def _expand_numbers_for_speech(text):
+    """Remplace tout nombre entier détecté dans le texte par son écriture
+    en toutes lettres françaises, pour que Piper le prononce correctement
+    au lieu de l'épeler chiffre par chiffre (voir le constat plus haut)."""
+    def _replace_grouped(m):
+        digits = re.sub(r"[  ]", "", m.group(0))
+        return _integer_to_french_words(int(digits))
+
+    text = _RE_GROUPED_NUMBER.sub(_replace_grouped, text)
+
+    def _replace_plain(m):
+        digits = m.group(0)
+        if len(digits) > 1 and digits[0] == "0":
+            # Zéro(s) non significatif en tête (ex. "007", horaire) : pas
+            # un vrai cardinal, le convertir donnerait un résultat faux.
+            return digits
+        return _integer_to_french_words(int(digits))
+
+    return _RE_PLAIN_NUMBER.sub(_replace_plain, text)
+
+
 # Notification HUD reconnue dans un vrai Game.log (ex. "Schémas reçu :
 # Ezra") à chaque récupération d'un schéma de fabrication. Plutôt que de
 # laisser ce texte retomber dans le mécanisme générique de "correction
@@ -6139,6 +6256,7 @@ class Api:
         if not text:
             return
         text = self._strip_markdown_for_speech(text)
+        text = _expand_numbers_for_speech(text)
         self._tts_queue.put({
             "text": text,
             "piper_voice": piper_voice if piper_voice is not None else self.piper_voice,

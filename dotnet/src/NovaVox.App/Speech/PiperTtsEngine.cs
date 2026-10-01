@@ -63,6 +63,7 @@ public sealed class PiperTtsEngine : IDisposable
     public void Speak(string? text, string? piperVoice = null)
     {
         var cleaned = TtsTextSanitizer.StripMarkdownForSpeech((text ?? "").Trim());
+        cleaned = FrenchNumberExpander.Expand(cleaned);
         if (cleaned.Length == 0) return;
         _queue.Add(new TtsRequest(cleaned, piperVoice ?? DefaultPiperVoice));
     }
