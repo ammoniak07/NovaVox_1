@@ -14,6 +14,7 @@ public class GameLogDestinationsTests
     [InlineData("ab_mine_stanton3_med_005", "Base minière DYV-JKE")]
     [InlineData("MISSION_QT_Quantum_Beacon_732699457697", "Quantum Beacon")]
     [InlineData("rs_ext_cru-leo1", "Seraphim Station")]
+    [InlineData("rs_ext_pyro5_l2", "Gaslight")]
     public void HumanizeDestination_MatchesPythonReference(string rawId, string expected)
     {
         Assert.Equal(expected, GameLogDestinations.HumanizeDestination(rawId));
